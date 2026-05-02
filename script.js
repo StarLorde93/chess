@@ -369,6 +369,13 @@ function finishTurn(didIMakeMove) {
     }
 }
 
+function showTurnToast() {
+    let toast = document.getElementById('app-toast');
+    toast.classList.remove('show');
+    void toast.offsetWidth; // Trigger reflow to restart animation
+    showToast("Your Turn!", "info", 1500);
+}
+
 function updateStatus() {
     let statusText = document.getElementById('game-status-text');
     let myInd = document.getElementById('my-status');
@@ -404,7 +411,7 @@ function updateStatus() {
             myInd.classList.add('active-turn');
             oppInd.classList.remove('active-turn');
             
-            if (!isCheck && previousTurn !== myColor) showToast("Your Turn!", "info", 1500);
+            if (!isCheck && previousTurn !== myColor) showTurnToast();
         } else {
             statusText.innerText = `${oppName}'s turn` + checkTxt;
             oppInd.classList.add('active-turn');

@@ -45,7 +45,7 @@ html, body {
 .panel {
     display: none;
     flex-direction: column;
-    width: 90%;
+    width: 100%;
     background: var(--panel-bg);
     padding: 2rem;
     border-radius: var(--border-radius);
@@ -58,7 +58,6 @@ html, body {
 }
 
 .panel.game-panel {
-    width: 100%;
     height: 100%;
     border-radius: 0;
     padding: 1rem;
@@ -136,7 +135,6 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    max-width: min(100vw, 55vh);
     margin: 0 auto;
     padding: 10px 0;
 }
@@ -148,15 +146,15 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 #game-status-text { color: var(--text-muted); font-size: 0.9rem; }
 .small-btn { padding: 8px 16px; font-size: 0.9rem; flex: none; background: rgba(255,255,255,0.1); }
 
-/* Chessboard Container - STRICTLY LOCKED TO A PERFECT SQUARE */
+/* STRICT BOARD BOUNDARIES */
 .board-container {
-    --board-size: min(95vw, 55vh);
-    width: var(--board-size) !important;
-    height: var(--board-size) !important;
-    min-height: var(--board-size) !important;
-    max-height: var(--board-size) !important;
-    flex-shrink: 0 !important; /* Prevents the Flexbox parent from stretching it vertically */
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-height: 55vh; 
     margin: 15px auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .chessboard {
@@ -165,6 +163,8 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     grid-template-rows: repeat(8, 1fr);
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -172,10 +172,8 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 
 .square {
     position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: clamp(24px, min(10vw, 7vh), 48px);
+    width: 100%;
+    height: 100%;
     cursor: pointer;
 }
 
@@ -183,14 +181,31 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.dark { background-color: var(--board-dark); }
 .square.selected { background-color: var(--highlight) !important; }
 
+/* 
+  ABSOLUTE POSITIONING FOR PIECES
+  This rips the text out of the grid flow. 
+  The grid cells will no longer shrink/grow when pieces move.
+*/
+.piece {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -52%); /* Centered and optically nudged up */
+    font-size: clamp(24px, min(10vw, 6vh), 48px);
+    z-index: 2;
+    pointer-events: none;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
+}
+.piece.w { color: #ffffff; }
+.piece.b { color: #000000; filter: drop-shadow(0 2px 2px rgba(255,255,255,0.3)); }
 
+/* Move Hints */
 .square.hint::after {
     content: ''; 
     position: absolute; 
-    top: 0; left: 0; bottom: 0; right: 0;
+    top: 35%; left: 35%; bottom: 35%; right: 35%;
     background: rgba(0, 0, 0, 0.25); 
     border-radius: 50%; 
-    transform: scale(0.25);
     pointer-events: none;
     z-index: 1;
 }
@@ -198,24 +213,12 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.hint-capture::after {
     content: ''; 
     position: absolute; 
-    top: 0; left: 0; bottom: 0; right: 0;
+    top: 10%; left: 10%; bottom: 10%; right: 10%;
     border: 5px solid rgba(0, 0, 0, 0.25); 
     border-radius: 50%; 
-    transform: scale(0.85);
     pointer-events: none;
     z-index: 1;
 }
-
-/* Unicode Pieces */
-.piece {
-    position: relative;
-    z-index: 2;
-    pointer-events: none;
-    transform: translateY(-2px);
-    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
-}
-.piece.w { color: #ffffff; }
-.piece.b { color: #000000; filter: drop-shadow(0 2px 2px rgba(255,255,255,0.3)); }
 
 /* Sumit Easter Egg CSS */
 .sumit-suggestion-from {

@@ -31,18 +31,33 @@ function startGame(selectedMode, difficulty = 1) {
 }
 
 function renderBoard() {
-    boardEl.innerHTML = '';
     const board = game.board(); // Returns 8x8 array
+    
+    // Initialize board DOM only once to prevent layout flickering
+    if (boardEl.children.length === 0) {
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                let squareDiv = document.createElement('div');
+                let isLight = (r + c) % 2 === 0;
+                squareDiv.className = `square ${isLight ? 'light' : 'dark'}`;
+                let squareAlgebraic = String.fromCharCode(97 + c) + (8 - r);
+                squareDiv.dataset.sq = squareAlgebraic;
+                squareDiv.addEventListener('click', () => handleSquareClick(squareAlgebraic));
+                boardEl.appendChild(squareDiv);
+            }
+        }
+    }
 
+    // Update piece positions and clear highlights
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-            let squareDiv = document.createElement('div');
+            let squareAlgebraic = String.fromCharCode(97 + c) + (8 - r);
+            let squareDiv = document.querySelector(`[data-sq="${squareAlgebraic}"]`);
+            
+            // Reset base classes to remove previous highlights
             let isLight = (r + c) % 2 === 0;
             squareDiv.className = `square ${isLight ? 'light' : 'dark'}`;
-            
-            // algebraic notation (e.g., 'a8', 'e4')
-            let squareAlgebraic = String.fromCharCode(97 + c) + (8 - r);
-            squareDiv.dataset.sq = squareAlgebraic;
+            squareDiv.innerHTML = ''; // Clear existing piece span
             
             let piece = board[r][c];
             if (piece) {
@@ -51,9 +66,6 @@ function renderBoard() {
                 pSpan.innerText = pieceMap[piece.type];
                 squareDiv.appendChild(pSpan);
             }
-
-            squareDiv.addEventListener('click', () => handleSquareClick(squareAlgebraic));
-            boardEl.appendChild(squareDiv);
         }
     }
 }
@@ -102,7 +114,14 @@ function highlightMoves(sq) {
     // Highlight legal moves
     moves.forEach(m => {
         let el = document.querySelector(`[data-sq="${m.to}"]`);
-        if (el) el.classList.add('hint');
+        if (el) {
+            // Use a hollow ring for captures, filled dot for empty squares
+            if (m.flags.includes('c') || m.flags.includes('e')) {
+                el.classList.add('hint-capture');
+            } else {
+                el.classList.add('hint');
+            }
+        }
     });
 }
 

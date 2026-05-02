@@ -136,7 +136,7 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    max-width: 400px;
+    max-width: min(100vw, 55vh);
     margin: 0 auto;
     padding: 10px 0;
 }
@@ -148,13 +148,12 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 #game-status-text { color: var(--text-muted); font-size: 0.9rem; }
 .small-btn { padding: 8px 16px; font-size: 0.9rem; flex: none; background: rgba(255,255,255,0.1); }
 
-/* Chessboard */
+/* Chessboard Container - Height Constrained so bottom row never cuts off */
 .board-container {
     width: 100%;
-    /* Added 60vh limit so it physically cannot overflow the screen height */
-    max-width: min(100%, 60vh); 
+    max-width: min(100vw, 55vh);
     aspect-ratio: 1/1;
-    margin: clamp(10px, 2vh, 20px) auto;
+    margin: 15px auto;
 }
 
 .chessboard {
@@ -173,8 +172,7 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     display: flex;
     justify-content: center;
     align-items: center;
-    /* Scales font based on viewport height to match board */
-    font-size: clamp(24px, min(10vw, 7vh), 48px); 
+    font-size: clamp(24px, min(10vw, 7vh), 48px);
     cursor: pointer;
 }
 
@@ -182,23 +180,33 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.dark { background-color: var(--board-dark); }
 .square.selected { background-color: var(--highlight) !important; }
 
-/* Valid Move Hints - Indestructible absolute binding */
+/* 
+  BULLETPROOF CIRCLES: 
+  By pinning top/bottom/left/right to 0, it perfectly fills the square cell.
+  Then we use transform: scale() to shrink it. This entirely bypasses the iOS 
+  aspect-ratio zero-height bug.
+*/
+
 .square.hint::after {
     content: ''; 
     position: absolute; 
-    top: 35%; bottom: 35%; left: 35%; right: 35%;
-    background: rgba(0, 0, 0, 0.2); 
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: rgba(0, 0, 0, 0.25); 
     border-radius: 50%; 
+    transform: scale(0.25);
     pointer-events: none;
+    z-index: 1;
 }
 
 .square.hint-capture::after {
     content: ''; 
     position: absolute; 
-    top: 10%; bottom: 10%; left: 10%; right: 10%;
-    border: 5px solid rgba(0, 0, 0, 0.2); 
+    top: 0; left: 0; bottom: 0; right: 0;
+    border: 5px solid rgba(0, 0, 0, 0.25); 
     border-radius: 50%; 
+    transform: scale(0.85);
     pointer-events: none;
+    z-index: 1;
 }
 
 /* Unicode Pieces */
@@ -218,15 +226,15 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     animation: pulse-gold 1.5s infinite alternate;
 }
 
-.sumit-target-ring {
+.sumit-suggestion-to::after {
+    content: ''; 
     position: absolute; 
-    top: 10%; bottom: 10%; left: 10%; right: 10%;
+    top: 0; left: 0; right: 0; bottom: 0;
     border: 5px solid rgba(255, 215, 0, 1); 
     border-radius: 50%;
     pointer-events: none; 
     z-index: 3;
     animation: pulse-ring 1s infinite alternate;
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 @keyframes pulse-gold {
@@ -235,6 +243,6 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 }
 
 @keyframes pulse-ring {
-    from { transform: scale(0.85); opacity: 0.6; }
-    to { transform: scale(1.05); opacity: 1; }
+    from { transform: scale(0.7); opacity: 0.5; }
+    to { transform: scale(0.95); opacity: 1; box-shadow: inset 0 0 10px rgba(255,215,0,0.5), 0 0 10px rgba(255,215,0,0.5); }
 }

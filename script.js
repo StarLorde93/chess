@@ -158,7 +158,7 @@ function quitGame() {
     showPanel('menu');
 }
 
-// --- Ray-Casting Attacker Detection ---
+// --- Ray-Casting Attacker Detection (For the Red Pulse) ---
 function getCheckingSquares() {
     if (!game.in_check()) return [];
     
@@ -253,7 +253,6 @@ function renderBoard() {
         }
     }
 
-    // Handles the full board rotation dynamically through CSS rather than inline JS
     if (myColor === 'b') {
         boardEl.classList.add('flipped-board');
     } else {
@@ -425,7 +424,7 @@ function updateStatus() {
     previousTurn = game.turn();
 }
 
-// --- Sumit Easter Egg (Minimax God-Mode) ---
+// --- Sumit Easter Egg (Minimax Depth 4) ---
 function isSumit() {
     return localName.toLowerCase() === 'sumit';
 }

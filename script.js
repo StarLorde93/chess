@@ -133,7 +133,6 @@ function setupConnectionHandlers() {
         }
     });
 
-    // Cleaned up Disconnect Handling (Routes straight to Main Menu)
     conn.on('close', () => {
         if (!game.game_over()) {
             showToast(`You Won! ${oppName} Fled.`, 'success', 3000);
@@ -141,7 +140,7 @@ function setupConnectionHandlers() {
                 quitGame();
             }, 3000);
         } else {
-            quitGame(); // Just quit if the game was naturally over
+            quitGame();
         }
     });
 }
@@ -159,7 +158,7 @@ function quitGame() {
     showPanel('menu');
 }
 
-// --- Ray-Casting Attacker Detection (For the Red Pulse) ---
+// --- Ray-Casting Attacker Detection ---
 function getCheckingSquares() {
     if (!game.in_check()) return [];
     
@@ -254,6 +253,13 @@ function renderBoard() {
         }
     }
 
+    // Handles the full board rotation dynamically through CSS rather than inline JS
+    if (myColor === 'b') {
+        boardEl.classList.add('flipped-board');
+    } else {
+        boardEl.classList.remove('flipped-board');
+    }
+
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             let algebraic = String.fromCharCode(97 + c) + (8 - r);
@@ -278,14 +284,12 @@ function renderBoard() {
                 pSpan.innerText = pieceMap[piece.type];
                 
                 if (myColor === 'b') {
-                    pSpan.style.transform = 'rotate(180deg)';
+                    pSpan.classList.add('flipped');
                 }
                 sq.appendChild(pSpan);
             }
         }
     }
-
-    boardEl.style.transform = myColor === 'b' ? 'rotate(180deg)' : 'none';
 }
 
 function isMyTurn() {
@@ -372,7 +376,7 @@ function finishTurn(didIMakeMove) {
 function showTurnToast() {
     let toast = document.getElementById('app-toast');
     toast.classList.remove('show');
-    void toast.offsetWidth; // Trigger reflow to restart animation
+    void toast.offsetWidth; 
     showToast("Your Turn!", "info", 1500);
 }
 
@@ -411,7 +415,7 @@ function updateStatus() {
             myInd.classList.add('active-turn');
             oppInd.classList.remove('active-turn');
             
-            if (!isCheck && previousTurn !== myColor) showTurnToast();
+            if (!isCheck && previousTurn !== myColor && previousTurn !== null) showTurnToast();
         } else {
             statusText.innerText = `${oppName}'s turn` + checkTxt;
             oppInd.classList.add('active-turn');

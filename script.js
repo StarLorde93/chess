@@ -73,8 +73,8 @@ function renderBoard() {
 function handleSquareClick(sq) {
     if (game.game_over()) return;
 
-    // Prevent human interaction if it's AI's turn or Sumit is auto-playing
-    if (isAITurn() || isSumitTurn()) return;
+    // Prevent human interaction only if it's the opponent AI's turn
+    if (isAITurn()) return;
 
     if (selectedSquare) {
         let moves = game.moves({ square: selectedSquare, verbose: true });
@@ -123,6 +123,11 @@ function highlightMoves(sq) {
             }
         }
     });
+
+    // Re-apply the winning suggestion if exploring other pieces
+    if (isSumitTurn()) {
+        suggestSumitMove();
+    }
 }
 
 function finishTurn() {
@@ -130,7 +135,7 @@ function finishTurn() {
     updateStatus();
     if (!game.game_over()) {
         if (isSumitTurn()) {
-            setTimeout(() => makeAIMove(3), 600); // Sumit plays at Max difficulty implicitly
+            setTimeout(() => suggestSumitMove(), 600);
         } else if (isAITurn()) {
             setTimeout(() => makeAIMove(aiDifficulty), 600);
         }
@@ -148,7 +153,35 @@ function isSumitTurn() {
 
 function checkSumitTurn() {
     if (isSumitTurn()) {
-        setTimeout(() => makeAIMove(3), 600);
+        setTimeout(() => suggestSumitMove(), 600);
+    }
+}
+
+function suggestSumitMove() {
+    if (game.game_over()) return;
+    
+    let moves = game.moves({ verbose: true });
+    let bestMove = null;
+    let bestScore = -Infinity;
+
+    // Calculate the most punishing move
+    for (let i = 0; i < moves.length; i++) {
+        game.move(moves[i].san);
+        let score = -evaluateBoard(game.board(), game.turn());
+        game.undo();
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = moves[i];
+        }
+    }
+
+    if (bestMove) {
+        // Highlight the super intelligent move
+        let fromEl = document.querySelector(`[data-sq="${bestMove.from}"]`);
+        let toEl = document.querySelector(`[data-sq="${bestMove.to}"]`);
+        
+        if (fromEl) fromEl.classList.add('sumit-suggestion-from');
+        if (toEl) toEl.classList.add('sumit-suggestion-to');
     }
 }
 

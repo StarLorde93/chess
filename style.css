@@ -148,9 +148,12 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 
 /* STRICT BOARD BOUNDARIES */
 .board-container {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    max-height: 55vh; 
+    --board-size: min(95vw, 55vh);
+    width: var(--board-size) !important;
+    height: var(--board-size) !important;
+    min-height: var(--board-size) !important;
+    max-height: var(--board-size) !important;
+    flex-shrink: 0 !important; 
     margin: 15px auto;
     display: flex;
     justify-content: center;
@@ -182,16 +185,18 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.selected { background-color: var(--highlight) !important; }
 
 /* 
-  ABSOLUTE POSITIONING FOR PIECES
-  This rips the text out of the grid flow. 
-  The grid cells will no longer shrink/grow when pieces move.
+  BULLETPROOF PIECE CENTERING
+  By using Flexbox inside the absolute container, the JS rotate 
+  will no longer break the centering math. 
 */
 .piece {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -52%); /* Centered and optically nudged up */
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     font-size: clamp(24px, min(10vw, 6vh), 48px);
+    line-height: 1;
     z-index: 2;
     pointer-events: none;
     filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));

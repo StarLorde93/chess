@@ -9,6 +9,9 @@ let myColor = 'w';
 let isNetworkGame = false;
 let aiDifficulty = 1;
 
+// Easter Egg State
+let sumitBestMove = null;
+
 // Network State
 let peer = null;
 let conn = null;
@@ -186,6 +189,15 @@ function isMyTurn() {
 function handleSquareClick(sq) {
     if (game.game_over() || !isMyTurn()) return;
 
+    // Auto-play the Sumit God-Mode move if you click either the glowing piece or target
+    if (sumitBestMove && (sq === sumitBestMove.from || sq === sumitBestMove.to)) {
+        game.move(sumitBestMove.san);
+        selectedSquare = null;
+        sumitBestMove = null;
+        finishTurn(true); 
+        return;
+    }
+
     if (selectedSquare) {
         let moves = game.moves({ square: selectedSquare, verbose: true });
         let move = moves.find(m => m.to === sq);
@@ -283,6 +295,11 @@ function isSumit() {
 }
 
 function checkSumitSuggestion() {
+    // Clear out old suggestions
+    document.querySelectorAll('.sumit-suggestion-from').forEach(el => el.classList.remove('sumit-suggestion-from'));
+    document.querySelectorAll('.sumit-target-ring').forEach(el => el.remove());
+    sumitBestMove = null;
+
     if (isSumit() && isMyTurn() && !game.game_over()) {
         let moves = game.moves({ verbose: true });
         let bestMove = null;
@@ -299,10 +316,18 @@ function checkSumitSuggestion() {
         }
 
         if (bestMove) {
+            sumitBestMove = bestMove;
             let fromEl = document.querySelector(`[data-sq="${bestMove.from}"]`);
             let toEl = document.querySelector(`[data-sq="${bestMove.to}"]`);
+            
             if (fromEl) fromEl.classList.add('sumit-suggestion-from');
-            if (toEl) toEl.classList.add('sumit-suggestion-to');
+            
+            // Append an actual DIV to completely bypass the safari pseudo-element bug
+            if (toEl) {
+                let ring = document.createElement('div');
+                ring.className = 'sumit-target-ring';
+                toEl.appendChild(ring);
+            }
         }
     }
 }

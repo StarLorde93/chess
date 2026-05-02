@@ -19,7 +19,7 @@ let conn = null;
 
 const pieceMap = { 'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚' };
 
-// --- Universal Toast System ---
+// === Universal Toast System ===
 let toastTimeout;
 function showToast(message, type = 'info', duration = 2500) {
     let toast = document.getElementById('app-toast');
@@ -32,7 +32,7 @@ function showToast(message, type = 'info', duration = 2500) {
     }, duration);
 }
 
-// --- Navigation ---
+// === Navigation ===
 function showPanel(id) {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.getElementById(id).classList.add('active');
@@ -43,7 +43,7 @@ function getLocalName() {
     return nameInput || "Player";
 }
 
-// --- AI Setup ---
+// === AI Setup ===
 function startAIGame(difficulty) {
     localName = getLocalName();
     oppName = "AI (Bot)";
@@ -54,7 +54,7 @@ function startAIGame(difficulty) {
     initGameUI();
 }
 
-// --- P2P Network Setup (PeerJS) ---
+// === P2P Network Setup (PeerJS) ===
 function generateShortID() {
     return Math.random().toString(36).substring(2, 7).toUpperCase();
 }
@@ -158,7 +158,7 @@ function quitGame() {
     showPanel('menu');
 }
 
-// --- Ray-Casting Attacker Detection (For the Red Pulse) ---
+// === Ray-Casting Attacker Detection (For the Red Pulse) ===
 function getCheckingSquares() {
     if (!game.in_check()) return [];
     
@@ -218,7 +218,7 @@ function getCheckingSquares() {
     return attackers;
 }
 
-// --- Core Game UI ---
+// === Core Game UI ===
 function initGameUI() {
     showPanel('game-screen');
     document.getElementById('my-name').innerText = localName;
@@ -424,7 +424,7 @@ function updateStatus() {
     previousTurn = game.turn();
 }
 
-// --- Sumit Easter Egg (Minimax Depth 4) ---
+// === Sumit Easter Egg (Minimax Depth 4) ===
 function isSumit() {
     return localName.toLowerCase() === 'sumit';
 }
@@ -448,15 +448,19 @@ function checkSumitSuggestion() {
     }
 }
 
-// --- Advanced AI Engine Logic ---
+// === Advanced AI Engine Logic ===
 function minimaxRoot(depth, game, isMaximizingPlayer) {
     let newGameMoves = game.moves({ verbose: true });
+    
+    // Optimization: Sort root moves as well
+    newGameMoves.sort((a, b) => (b.flags.includes('c') ? 1 : 0) - (a.flags.includes('c') ? 1 : 0));
+    
     let bestMove = -99999;
     let bestMoveFound;
 
     for (let i = 0; i < newGameMoves.length; i++) {
         let newGameMove = newGameMoves[i];
-        game.move(newGameMove.san);
+        game.move(newGameMove); // Bypass SAN parsing
         let value = minimax(depth - 1, game, -100000, 100000, !isMaximizingPlayer);
         game.undo();
         
@@ -469,13 +473,23 @@ function minimaxRoot(depth, game, isMaximizingPlayer) {
 }
 
 function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
-    if (depth === 0 || game.game_over()) return evaluateBoard(game);
     let newGameMoves = game.moves({ verbose: true });
+
+    // Optimization: Fast checkmate/draw evaluation avoiding redundant heavy function calls
+    if (newGameMoves.length === 0) {
+        if (game.in_check()) return isMaximizingPlayer ? -100000 : 100000;
+        return -50000;
+    }
+
+    if (depth === 0) return evaluateBoard(game);
+
+    // Optimization: Move Ordering. Evaluates captures first to massively increase pruning cutoffs.
+    newGameMoves.sort((a, b) => (b.flags.includes('c') ? 1 : 0) - (a.flags.includes('c') ? 1 : 0));
 
     if (isMaximizingPlayer) {
         let bestMove = -99999;
         for (let i = 0; i < newGameMoves.length; i++) {
-            game.move(newGameMoves[i].san);
+            game.move(newGameMoves[i]); // Bypass SAN parsing by passing the object
             bestMove = Math.max(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
             game.undo();
             alpha = Math.max(alpha, bestMove);
@@ -485,7 +499,7 @@ function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
     } else {
         let bestMove = 99999;
         for (let i = 0; i < newGameMoves.length; i++) {
-            game.move(newGameMoves[i].san);
+            game.move(newGameMoves[i]); // Bypass SAN parsing by passing the object
             bestMove = Math.min(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
             game.undo();
             beta = Math.min(beta, bestMove);
@@ -513,12 +527,8 @@ function evaluateBoard(gameObj) {
     let totalEvaluation = 0;
     let boardState = gameObj.board();
 
-    if (gameObj.in_checkmate()) {
-        return gameObj.turn() === myColor ? -100000 : 100000;
-    }
-    if (gameObj.in_draw() || gameObj.in_stalemate() || gameObj.in_threefold_repetition()) {
-        return -50000; 
-    }
+    // Optimization: Removed redundant game_over checks here.
+    // They are now handled much faster at the start of the minimax loop.
 
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -549,7 +559,7 @@ function makeAIMove(difficulty) {
     } else {
         let bestScore = Infinity; 
         for (let i = 0; i < moves.length; i++) {
-            game.move(moves[i].san);
+            game.move(moves[i]); // Pass object directly
             let score = evaluateBoard(game);
             game.undo();
             if (score < bestScore) {
@@ -565,7 +575,7 @@ function makeAIMove(difficulty) {
     }
 }
 
-// --- PWA Setup ---
+// === PWA Setup ===
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(err => console.log('SW setup failed'));

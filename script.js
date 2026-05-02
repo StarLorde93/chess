@@ -19,6 +19,19 @@ let conn = null;
 
 const pieceMap = { 'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚' };
 
+// --- Universal Toast System ---
+let toastTimeout;
+function showToast(message, type = 'info', duration = 2500) {
+    let toast = document.getElementById('app-toast');
+    if (!toast) return;
+    toast.innerText = message;
+    toast.className = `toast show ${type}`;
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
+}
+
 // --- Navigation ---
 function showPanel(id) {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -44,6 +57,15 @@ function startAIGame(difficulty) {
 // --- P2P Network Setup (PeerJS) ---
 function generateShortID() {
     return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+function copyRoomCode() {
+    let code = document.getElementById('room-code-display').innerText;
+    if(code && code !== "Connecting...") {
+        navigator.clipboard.writeText(code).then(() => {
+            showToast("Code Copied!", "success", 1500);
+        });
+    }
 }
 
 function setupPeer() {
@@ -89,7 +111,8 @@ function joinGame() {
     });
     
     peer.on('error', (err) => {
-        document.getElementById('join-status').innerText = "Connection failed. Check code.";
+        document.getElementById('join-status').innerText = "Connection failed.";
+        showToast("Connection failed. Check Code.", "error", 3000);
     });
 }
 
@@ -110,17 +133,16 @@ function setupConnectionHandlers() {
         }
     });
 
-    // Handle Opponent Quitting Mid-Game
+    // Cleaned up Disconnect Handling (Routes straight to Main Menu)
     conn.on('close', () => {
-        if (game.game_over()) return; // Don't trigger if game was already over naturally
-        let statusText = document.getElementById('game-status-text');
-        statusText.innerText = `You Won! ${oppName} Fled.`;
-        statusText.classList.add('check-text'); // Make it red & pop
-        
-        // Show success message briefly, then boot them to main menu
-        setTimeout(() => {
-            quitGame();
-        }, 3500);
+        if (!game.game_over()) {
+            showToast(`You Won! ${oppName} Fled.`, 'success', 3000);
+            setTimeout(() => {
+                quitGame();
+            }, 3000);
+        } else {
+            quitGame(); // Just quit if the game was naturally over
+        }
     });
 }
 
@@ -144,7 +166,6 @@ function getCheckingSquares() {
     let kingSq = null;
     let oppColor = game.turn() === 'w' ? 'b' : 'w';
 
-    // 1. Find the King currently under check
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             let sq = String.fromCharCode(97 + c) + (8 - r);
@@ -159,7 +180,6 @@ function getCheckingSquares() {
     let tr = 8 - parseInt(kingSq[1]);
     let tc = kingSq.charCodeAt(0) - 97;
 
-    // 2. Check Knights
     const knightMoves = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
     knightMoves.forEach(m => {
         let r = tr + m[0], c = tc + m[1];
@@ -169,7 +189,6 @@ function getCheckingSquares() {
         }
     });
 
-    // 3. Check Pawns
     let pawnDir = oppColor === 'w' ? 1 : -1;
     let pr = tr + pawnDir;
     [tc - 1, tc + 1].forEach(pc => {
@@ -179,7 +198,6 @@ function getCheckingSquares() {
         }
     });
 
-    // 4. Raycast for Sliding Pieces (Rooks, Bishops, Queens)
     const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
     dirs.forEach(d => {
         for (let step = 1; step < 8; step++) {
@@ -194,7 +212,7 @@ function getCheckingSquares() {
                         attackers.push(String.fromCharCode(97 + c) + (8 - r));
                     }
                 }
-                break; // Stop looking further on this vector
+                break;
             }
         }
     });
@@ -218,7 +236,6 @@ function initGameUI() {
 }
 
 function renderBoard() {
-    // Easily extract the absolute last move from game history
     let history = game.history({ verbose: true });
     let lastMove = history.length > 0 ? history[history.length - 1] : null;
     let checkingSquares = getCheckingSquares();
@@ -246,12 +263,10 @@ function renderBoard() {
             sq.className = `square ${isLight ? 'light' : 'dark'}`; 
             sq.innerHTML = '';
             
-            // Add Blue Highlight for Last Move tracking
             if (lastMove && (algebraic === lastMove.from || algebraic === lastMove.to)) {
                 sq.classList.add('last-move');
             }
 
-            // Add Red Pulse to pieces checking the king
             if (checkingSquares.includes(algebraic)) {
                 sq.classList.add('checking-piece');
             }
@@ -354,13 +369,6 @@ function finishTurn(didIMakeMove) {
     }
 }
 
-function showTurnToast() {
-    let toast = document.getElementById('turn-toast');
-    toast.classList.remove('show');
-    void toast.offsetWidth; // Trigger reflow to restart animation
-    toast.classList.add('show');
-}
-
 function updateStatus() {
     let statusText = document.getElementById('game-status-text');
     let myInd = document.getElementById('my-status');
@@ -370,24 +378,33 @@ function updateStatus() {
         statusText.innerText = `Checkmate! ${isMyTurn() ? oppName : "You"} win!`;
         statusText.classList.add('check-text');
         myInd.className = 'indicator'; oppInd.className = 'indicator';
+        
+        if (previousTurn !== game.turn()) {
+            showToast(`Checkmate! ${isMyTurn() ? oppName : "You"} win!`, isMyTurn() ? 'error' : 'success', 4000);
+        }
     } else if (game.in_draw() || game.in_stalemate()) {
         statusText.innerText = "Game drawn!";
         statusText.classList.remove('check-text');
         myInd.className = 'indicator'; oppInd.className = 'indicator';
+        
+        if (previousTurn !== game.turn()) showToast("Game Drawn!", "info", 4000);
     } else {
         let isCheck = game.in_check();
         let checkTxt = isCheck ? " (Check!)" : "";
         
-        if (isCheck) statusText.classList.add('check-text');
-        else statusText.classList.remove('check-text');
+        if (isCheck) {
+            statusText.classList.add('check-text');
+            if (previousTurn !== game.turn()) showToast("Check!", "error", 1500);
+        } else {
+            statusText.classList.remove('check-text');
+        }
 
         if (isMyTurn()) {
             statusText.innerText = "Your turn" + checkTxt;
             myInd.classList.add('active-turn');
             oppInd.classList.remove('active-turn');
             
-            // Pop the toaster when turn shifts to the local player
-            if (previousTurn !== myColor) showTurnToast();
+            if (!isCheck && previousTurn !== myColor) showToast("Your Turn!", "info", 1500);
         } else {
             statusText.innerText = `${oppName}'s turn` + checkTxt;
             oppInd.classList.add('active-turn');
@@ -408,7 +425,6 @@ function checkSumitSuggestion() {
     sumitBestMove = null;
 
     if (isSumit() && isMyTurn() && !game.game_over()) {
-        // Deep Minimax search. Depth set to 4 half-moves. 
         let bestMoveInfo = minimaxRoot(4, game, true);
 
         if (bestMoveInfo && bestMoveInfo.move) {

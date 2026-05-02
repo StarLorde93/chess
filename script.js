@@ -45,7 +45,6 @@ function generateShortID() {
 function setupPeer() {
     if (peer) peer.destroy();
     let peerId = generateShortID();
-    // Connect to PeerJS free public cloud server
     peer = new Peer(peerId, { debug: 2 }); 
     return peerId;
 }
@@ -93,17 +92,16 @@ function joinGame() {
 function setupConnectionHandlers() {
     conn.on('open', () => {
         isNetworkGame = true;
-        // Exchange names
         conn.send({ type: 'name', data: localName });
     });
 
     conn.on('data', (payload) => {
         if (payload.type === 'name') {
             oppName = payload.data || "Opponent";
-            initGameUI(); // Start game once names are exchanged
+            initGameUI(); 
         } else if (payload.type === 'move') {
             game.move(payload.data);
-            finishTurn(false); // False means don't broadcast, we just received it
+            finishTurn(false); 
         }
     });
 
@@ -133,7 +131,6 @@ function initGameUI() {
     renderBoard();
     updateStatus();
     
-    // If playing AI and we happen to be black (not implemented via UI currently, but safe)
     if (!isNetworkGame && myColor === 'b') {
         setTimeout(() => makeAIMove(aiDifficulty), 500);
     } else {
@@ -162,7 +159,7 @@ function renderBoard() {
             let sq = document.querySelector(`[data-sq="${algebraic}"]`);
             
             let isLight = (r + c) % 2 === 0;
-            sq.className = `square ${isLight ? 'light' : 'dark'}`; // reset
+            sq.className = `square ${isLight ? 'light' : 'dark'}`; 
             sq.innerHTML = '';
             
             let piece = game.board()[r][c];
@@ -171,7 +168,6 @@ function renderBoard() {
                 pSpan.className = `piece ${piece.color}`;
                 pSpan.innerText = pieceMap[piece.type];
                 
-                // Flip pieces if playing as black for local view
                 if (myColor === 'b') {
                     pSpan.style.transform = 'rotate(180deg) translateY(2px)';
                 }
@@ -180,7 +176,6 @@ function renderBoard() {
         }
     }
 
-    // Flip board visually if black
     boardEl.style.transform = myColor === 'b' ? 'rotate(180deg)' : 'none';
 }
 
@@ -198,7 +193,7 @@ function handleSquareClick(sq) {
         if (move) {
             game.move(move.san);
             selectedSquare = null;
-            finishTurn(true); // True means broadcast this move
+            finishTurn(true); 
         } else {
             let piece = game.get(sq);
             if (piece && piece.color === game.turn()) {
@@ -244,7 +239,6 @@ function finishTurn(didIMakeMove) {
     updateStatus();
 
     if (didIMakeMove && isNetworkGame && conn) {
-        // Send last move via P2P
         let history = game.history();
         conn.send({ type: 'move', data: history[history.length - 1] });
     }

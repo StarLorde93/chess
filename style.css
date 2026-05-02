@@ -151,9 +151,10 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 /* Chessboard */
 .board-container {
     width: 100%;
-    max-width: 400px;
+    /* Added 60vh limit so it physically cannot overflow the screen height */
+    max-width: min(100%, 60vh); 
     aspect-ratio: 1/1;
-    margin: 20px auto;
+    margin: clamp(10px, 2vh, 20px) auto;
 }
 
 .chessboard {
@@ -172,7 +173,8 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: clamp(32px, 10vw, 48px);
+    /* Scales font based on viewport height to match board */
+    font-size: clamp(24px, min(10vw, 7vh), 48px); 
     cursor: pointer;
 }
 
@@ -180,13 +182,12 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.dark { background-color: var(--board-dark); }
 .square.selected { background-color: var(--highlight) !important; }
 
-/* Valid Move Hints */
+/* Valid Move Hints - Indestructible absolute binding */
 .square.hint::after {
     content: ''; 
     position: absolute; 
-    top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 25%; aspect-ratio: 1 / 1;
-    background: rgba(0, 0, 0, 0.15); 
+    top: 35%; bottom: 35%; left: 35%; right: 35%;
+    background: rgba(0, 0, 0, 0.2); 
     border-radius: 50%; 
     pointer-events: none;
 }
@@ -194,9 +195,8 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.hint-capture::after {
     content: ''; 
     position: absolute; 
-    top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 85%; aspect-ratio: 1 / 1;
-    border: 5px solid rgba(0, 0, 0, 0.15); 
+    top: 10%; bottom: 10%; left: 10%; right: 10%;
+    border: 5px solid rgba(0, 0, 0, 0.2); 
     border-radius: 50%; 
     pointer-events: none;
 }
@@ -218,16 +218,15 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     animation: pulse-gold 1.5s infinite alternate;
 }
 
-.sumit-suggestion-to::after {
-    content: ''; 
+.sumit-target-ring {
     position: absolute; 
-    top: 50%; left: 50%;
-    width: 80%; aspect-ratio: 1 / 1;
+    top: 10%; bottom: 10%; left: 10%; right: 10%;
     border: 5px solid rgba(255, 215, 0, 1); 
     border-radius: 50%;
     pointer-events: none; 
     z-index: 3;
-    animation: pulse-ring 1.5s infinite alternate;
+    animation: pulse-ring 1s infinite alternate;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 @keyframes pulse-gold {
@@ -236,12 +235,6 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 }
 
 @keyframes pulse-ring {
-    from { 
-        transform: translate(-50%, -50%) scale(0.9); 
-        opacity: 0.5; 
-    }
-    to { 
-        transform: translate(-50%, -50%) scale(1.05); 
-        opacity: 1; 
-    }
+    from { transform: scale(0.85); opacity: 0.6; }
+    to { transform: scale(1.05); opacity: 1; }
 }

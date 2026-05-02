@@ -1,11 +1,11 @@
 {
-  "name": "Glass Chess",
+  "name": "Pro Chess",
   "short_name": "Chess",
-  "description": "A minimalist glassmorphism chess application.",
+  "description": "Professional minimalist chess application with P2P networking.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#1a1a2e",
+  "background_color": "#121212",
+  "theme_color": "#121212",
   "orientation": "portrait",
   "icons": [
     {

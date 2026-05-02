@@ -289,7 +289,7 @@ function updateStatus() {
     }
 }
 
-// --- Sumit Easter Egg ---
+// --- Sumit Easter Egg (Minimax God-Mode) ---
 function isSumit() {
     return localName.toLowerCase() === 'sumit';
 }
@@ -301,24 +301,13 @@ function checkSumitSuggestion() {
     sumitBestMove = null;
 
     if (isSumit() && isMyTurn() && !game.game_over()) {
-        let moves = game.moves({ verbose: true });
-        let bestMove = null;
-        let bestScore = -Infinity;
+        // Deep Minimax search (Depth 3) to trap king and preserve pieces
+        let bestMoveInfo = minimaxRoot(3, game, true);
 
-        for (let i = 0; i < moves.length; i++) {
-            game.move(moves[i].san);
-            let score = -evaluateBoard(game.board(), game.turn());
-            game.undo();
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = moves[i];
-            }
-        }
-
-        if (bestMove) {
-            sumitBestMove = bestMove;
-            let fromEl = document.querySelector(`[data-sq="${bestMove.from}"]`);
-            let toEl = document.querySelector(`[data-sq="${bestMove.to}"]`);
+        if (bestMoveInfo && bestMoveInfo.move) {
+            sumitBestMove = bestMoveInfo.move;
+            let fromEl = document.querySelector(`[data-sq="${sumitBestMove.from}"]`);
+            let toEl = document.querySelector(`[data-sq="${sumitBestMove.to}"]`);
             
             if (fromEl) fromEl.classList.add('sumit-suggestion-from');
             if (toEl) toEl.classList.add('sumit-suggestion-to');
@@ -326,7 +315,131 @@ function checkSumitSuggestion() {
     }
 }
 
-// --- Bot AI Logic ---
+// --- Advanced AI Engine Logic ---
+
+function minimaxRoot(depth, game, isMaximizingPlayer) {
+    let newGameMoves = game.moves({ verbose: true });
+    let bestMove = -99999;
+    let bestMoveFound;
+
+    for (let i = 0; i < newGameMoves.length; i++) {
+        let newGameMove = newGameMoves[i];
+        game.move(newGameMove.san);
+        
+        let value = minimax(depth - 1, game, -100000, 100000, !isMaximizingPlayer);
+        game.undo();
+        
+        if (value >= bestMove) {
+            bestMove = value;
+            bestMoveFound = newGameMove;
+        }
+    }
+    return { move: bestMoveFound, score: bestMove };
+}
+
+function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
+    if (depth === 0 || game.game_over()) {
+        return evaluateBoard(game);
+    }
+
+    let newGameMoves = game.moves({ verbose: true });
+
+    if (isMaximizingPlayer) {
+        let bestMove = -99999;
+        for (let i = 0; i < newGameMoves.length; i++) {
+            game.move(newGameMoves[i].san);
+            bestMove = Math.max(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
+            game.undo();
+            alpha = Math.max(alpha, bestMove);
+            if (beta <= alpha) return bestMove;
+        }
+        return bestMove;
+    } else {
+        let bestMove = 99999;
+        for (let i = 0; i < newGameMoves.length; i++) {
+            game.move(newGameMoves[i].san);
+            bestMove = Math.min(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
+            game.undo();
+            beta = Math.min(beta, bestMove);
+            if (beta <= alpha) return bestMove;
+        }
+        return bestMove;
+    }
+}
+
+// Values and Position bonuses for smart logic
+const pieceValues = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
+
+const pawnEval = [
+    [0,  0,  0,  0,  0,  0,  0,  0],
+    [50, 50, 50, 50, 50, 50, 50, 50],
+    [10, 10, 20, 30, 30, 20, 10, 10],
+    [5,  5, 10, 25, 25, 10,  5,  5],
+    [0,  0,  0, 20, 20,  0,  0,  0],
+    [5, -5,-10,  0,  0,-10, -5,  5],
+    [5, 10, 10,-20,-20, 10, 10,  5],
+    [0,  0,  0,  0,  0,  0,  0,  0]
+];
+const knightEval = [
+    [-50,-40,-30,-30,-30,-30,-40,-50],
+    [-40,-20,  0,  0,  0,  0,-20,-40],
+    [-30,  0, 10, 15, 15, 10,  0,-30],
+    [-30,  5, 15, 20, 20, 15,  5,-30],
+    [-30,  0, 15, 20, 20, 15,  0,-30],
+    [-30,  5, 10, 15, 15, 10,  5,-30],
+    [-40,-20,  0,  5,  5,  0,-20,-40],
+    [-50,-40,-30,-30,-30,-30,-40,-50]
+];
+const centerEval = [
+    [-20,-10,-10,-10,-10,-10,-10,-20],
+    [-10,  0,  0,  0,  0,  0,  0,-10],
+    [-10,  0,  5, 10, 10,  5,  0,-10],
+    [-10,  0, 10, 20, 20, 10,  0,-10],
+    [-10,  0, 10, 20, 20, 10,  0,-10],
+    [-10,  0,  5, 10, 10,  5,  0,-10],
+    [-10,  0,  0,  0,  0,  0,  0,-10],
+    [-20,-10,-10,-10,-10,-10,-10,-20]
+];
+
+function getPositionalBonus(piece, row, col) {
+    let r = piece.color === 'w' ? row : 7 - row;
+    if (piece.type === 'p') return pawnEval[r][col];
+    if (piece.type === 'n') return knightEval[r][col];
+    if (piece.type === 'b' || piece.type === 'q') return centerEval[r][col];
+    return 0; 
+}
+
+function evaluateBoard(gameObj) {
+    let totalEvaluation = 0;
+    let boardState = gameObj.board();
+
+    // Checkmates and Draws processing
+    if (gameObj.in_checkmate()) {
+        // If the side ABOUT to move is in checkmate, the side that just moved wins
+        return gameObj.turn() === myColor ? -100000 : 100000;
+    }
+    if (gameObj.in_draw() || gameObj.in_stalemate() || gameObj.in_threefold_repetition()) {
+        return -50000; // Hard penalty to avoid useless draws for Sumit
+    }
+
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            let piece = boardState[r][c];
+            if (piece) {
+                let value = pieceValues[piece.type] + getPositionalBonus(piece, r, c);
+                // Positive score favors 'myColor' (Sumit)
+                if (piece.color === myColor) {
+                    totalEvaluation += value;
+                } else {
+                    totalEvaluation -= value;
+                }
+            }
+        }
+    }
+    return totalEvaluation;
+}
+
+// Regular opponent Bot logic (updated to use new evaluateBoard)
 function makeAIMove(difficulty) {
     if (game.game_over()) return;
     let moves = game.moves({ verbose: true });
@@ -338,12 +451,12 @@ function makeAIMove(difficulty) {
         let captures = moves.filter(m => m.flags.includes('c'));
         bestMove = captures.length > 0 ? captures[Math.floor(Math.random() * captures.length)] : moves[Math.floor(Math.random() * moves.length)];
     } else {
-        let bestScore = -Infinity;
+        let bestScore = Infinity; // Bot wants to MINIMIZE the local player's score
         for (let i = 0; i < moves.length; i++) {
             game.move(moves[i].san);
-            let score = -evaluateBoard(game.board(), game.turn());
+            let score = evaluateBoard(game);
             game.undo();
-            if (score > bestScore) {
+            if (score < bestScore) {
                 bestScore = score;
                 bestMove = moves[i];
             }
@@ -354,22 +467,6 @@ function makeAIMove(difficulty) {
         game.move(bestMove.san);
         finishTurn(false);
     }
-}
-
-const pieceValues = { 'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 900 };
-function evaluateBoard(boardState, currentTurn) {
-    let totalEval = 0;
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            let p = boardState[r][c];
-            if (p) {
-                let val = pieceValues[p.type];
-                if (p.color === currentTurn) totalEval += val;
-                else totalEval -= val;
-            }
-        }
-    }
-    return totalEval;
 }
 
 // --- PWA Setup ---

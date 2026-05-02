@@ -499,13 +499,13 @@ function minimaxRoot(depth, game, isMaximizingPlayer) {
     let newGameMoves = game.moves({ verbose: true });
     newGameMoves.sort((a, b) => getMoveValue(b) - getMoveValue(a));
     
-    let bestMove = -99999;
+    let bestMove = -Infinity;
     let bestMoveFound;
 
     for (let i = 0; i < newGameMoves.length; i++) {
         let newGameMove = newGameMoves[i];
         game.move(newGameMove); 
-        let value = minimax(depth - 1, game, -100000, 100000, !isMaximizingPlayer);
+        let value = minimax(depth - 1, game, -Infinity, Infinity, !isMaximizingPlayer);
         game.undo();
         
         if (value >= bestMove) {
@@ -517,6 +517,9 @@ function minimaxRoot(depth, game, isMaximizingPlayer) {
 }
 
 function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
+    // CRITICAL FIX: Evaluate immediately at depth 0 BEFORE generating 800,000+ useless moves!
+    if (depth === 0) return evaluateBoard(game);
+
     let newGameMoves = game.moves({ verbose: true });
 
     if (newGameMoves.length === 0) {
@@ -524,28 +527,26 @@ function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
         return -50000;
     }
 
-    if (depth === 0) return evaluateBoard(game);
-
     newGameMoves.sort((a, b) => getMoveValue(b) - getMoveValue(a));
 
     if (isMaximizingPlayer) {
-        let bestMove = -99999;
+        let bestMove = -Infinity;
         for (let i = 0; i < newGameMoves.length; i++) {
             game.move(newGameMoves[i]); 
             bestMove = Math.max(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
             game.undo();
             alpha = Math.max(alpha, bestMove);
-            if (beta <= alpha) return bestMove;
+            if (beta <= alpha) break;
         }
         return bestMove;
     } else {
-        let bestMove = 99999;
+        let bestMove = Infinity;
         for (let i = 0; i < newGameMoves.length; i++) {
             game.move(newGameMoves[i]); 
             bestMove = Math.min(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
             game.undo();
             beta = Math.min(beta, bestMove);
-            if (beta <= alpha) return bestMove;
+            if (beta <= alpha) break;
         }
         return bestMove;
     }
@@ -555,41 +556,29 @@ const pawnEval = [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20
 const knightEval = [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
 const centerEval = [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,0,10,20,20,10,0,-10],[-10,0,10,20,20,10,0,-10],[-10,0,5,10,10,5,0,-10],[-10,0,0,0,0,0,0,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
 
-// Optimization: Extremely fast FEN-string parsing evaluation to prevent massive memory leaks
+// Optimization: Using native board iteration. FEN string splits were causing memory thrashing.
 function evaluateBoard(gameObj) {
     let totalEvaluation = 0;
-    let boardFen = gameObj.fen().split(' ')[0];
-    let row = 0;
-    let col = 0;
+    let boardState = gameObj.board();
 
-    for (let i = 0; i < boardFen.length; i++) {
-        let char = boardFen[i];
-        if (char === '/') {
-            row++;
-            col = 0;
-        } else if (char >= '1' && char <= '8') {
-            col += parseInt(char);
-        } else {
-            let isWhite = char === char.toUpperCase();
-            let type = char.toLowerCase();
-            let pieceColor = isWhite ? 'w' : 'b';
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            let piece = boardState[r][c];
+            if (piece) {
+                let value = pieceValues[piece.type];
+                let posValue = 0;
+                let pr = piece.color === 'w' ? r : 7 - r;
+                
+                if (piece.type === 'p') posValue = pawnEval[pr][c];
+                else if (piece.type === 'n') posValue = knightEval[pr][c];
+                else if (piece.type === 'b' || piece.type === 'q') posValue = centerEval[pr][c];
 
-            let value = pieceValues[type];
-            let r = pieceColor === 'w' ? row : 7 - row;
-            let posValue = 0;
-            
-            if (type === 'p') posValue = pawnEval[r][col];
-            else if (type === 'n') posValue = knightEval[r][col];
-            else if (type === 'b' || type === 'q') posValue = centerEval[r][col];
-
-            let pieceEval = value + posValue;
-            
-            if (pieceColor === myColor) {
-                totalEvaluation += pieceEval;
-            } else {
-                totalEvaluation -= pieceEval;
+                if (piece.color === myColor) {
+                    totalEvaluation += (value + posValue);
+                } else {
+                    totalEvaluation -= (value + posValue);
+                }
             }
-            col++;
         }
     }
     return totalEvaluation;

@@ -207,9 +207,17 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     animation: pulse-gold 1.5s infinite alternate;
 }
 .sumit-suggestion-to::after {
-    content: ''; position: absolute; width: 80%; height: 80%;
-    border: 5px solid rgba(255, 215, 0, 1); border-radius: 50%;
-    pointer-events: none; z-index: 3;
+    content: ''; 
+    position: absolute; 
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%; 
+    height: 80%;
+    border: 5px solid rgba(255, 215, 0, 1); 
+    border-radius: 50%;
+    pointer-events: none; 
+    z-index: 3;
     animation: pulse-ring 1.5s infinite alternate;
 }
 
@@ -218,6 +226,12 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     to { box-shadow: inset 0 0 30px rgba(255, 215, 0, 1) !important; }
 }
 @keyframes pulse-ring {
-    from { transform: scale(0.9); opacity: 0.5; }
-    to { transform: scale(1.05); opacity: 1; }
+    from { 
+        transform: translate(-50%, -50%) scale(0.9); 
+        opacity: 0.5; 
+    }
+    to { 
+        transform: translate(-50%, -50%) scale(1.05); 
+        opacity: 1; 
+    }
 }

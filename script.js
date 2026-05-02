@@ -297,7 +297,7 @@ function isSumit() {
 function checkSumitSuggestion() {
     // Clear out old suggestions
     document.querySelectorAll('.sumit-suggestion-from').forEach(el => el.classList.remove('sumit-suggestion-from'));
-    document.querySelectorAll('.sumit-target-ring').forEach(el => el.remove());
+    document.querySelectorAll('.sumit-suggestion-to').forEach(el => el.classList.remove('sumit-suggestion-to'));
     sumitBestMove = null;
 
     if (isSumit() && isMyTurn() && !game.game_over()) {
@@ -321,13 +321,7 @@ function checkSumitSuggestion() {
             let toEl = document.querySelector(`[data-sq="${bestMove.to}"]`);
             
             if (fromEl) fromEl.classList.add('sumit-suggestion-from');
-            
-            // Append an actual DIV to completely bypass the safari pseudo-element bug
-            if (toEl) {
-                let ring = document.createElement('div');
-                ring.className = 'sumit-target-ring';
-                toEl.appendChild(ring);
-            }
+            if (toEl) toEl.classList.add('sumit-suggestion-to');
         }
     }
 }

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Glass Chess</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <!-- Using chess.js for legal move validation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+</head>
+<body>
+    <div id="app" class="glass-container">
+        <!-- Main Menu -->
+        <div id="menu" class="glass-panel active">
+            <h1>Glass Chess</h1>
+            <div class="input-group">
+                <input type="text" id="player1" placeholder="Player 1 Name (White)">
+                <input type="text" id="player2" placeholder="Player 2 Name (Black)">
+            </div>
+            <div class="btn-group">
+                <button onclick="startGame('ai', 1)">Play AI (Easy)</button>
+                <button onclick="startGame('ai', 2)">Play AI (Medium)</button>
+                <button onclick="startGame('ai', 3)">Play AI (Hard)</button>
+                <button onclick="startGame('local')">Local Multiplayer</button>
+                <button onclick="showNetworkMenu()">Network / Room Code</button>
+            </div>
+        </div>
+
+        <!-- Network Menu (Placeholder for backend) -->
+        <div id="network-menu" class="glass-panel">
+            <h2>Join / Create Room</h2>
+            <input type="text" id="room-code" placeholder="Enter 4-digit code">
+            <div class="btn-group">
+                <button onclick="alert('Note: GitHub Pages is static. To make this work across devices, you need a backend like Firebase or Socket.io. Defaulting to local play.'); startGame('local');">Join Room</button>
+                <button onclick="document.getElementById('network-menu').classList.remove('active'); document.getElementById('menu').classList.add('active');">Back</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="glass-panel">
+            <div class="header">
+                <span id="status">White to move</span>
+                <button onclick="location.reload()" class="small-btn">Quit</button>
+            </div>
+            <div id="board" class="chessboard glass-board"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

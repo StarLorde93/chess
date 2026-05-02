@@ -34,20 +34,22 @@ html, body {
 
 #app {
     width: 100%;
-    max-width: 450px;
+    max-width: 500px;
     height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
+    padding: 10px;
 }
 
+/* Background Panel */
 .panel {
     display: none;
     flex-direction: column;
     width: 100%;
     background: var(--panel-bg);
-    padding: 2rem;
+    padding: 20px;
     border-radius: var(--border-radius);
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     animation: slideUp 0.3s ease-out forwards;
@@ -58,11 +60,8 @@ html, body {
 }
 
 .panel.game-panel {
-    height: 100%;
-    border-radius: 0;
-    padding: 1rem;
-    justify-content: center;
-    position: relative;
+    height: auto; /* Shrink-wraps the board dynamically */
+    padding: 15px;
 }
 
 @keyframes slideUp {
@@ -132,7 +131,6 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 
 .status-text { text-align: center; color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.9rem; transition: color 0.3s; }
 
-/* Dynamic Status Classes */
 .check-text { 
     color: #ff4a4a !important; 
     font-weight: bold; 
@@ -156,16 +154,11 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 #game-status-text { color: var(--text-muted); font-size: 0.9rem; }
 .small-btn { padding: 8px 16px; font-size: 0.9rem; flex: none; background: rgba(255,255,255,0.1); }
 
-/* STRICT BOARD BOUNDARIES - FIXED SPILL OVER */
+/* PERFECT SQUARE BOARD BOUNDARIES */
 .board-container {
-    /* Set to 100% of parent panel to ensure it never spills past the background */
-    --board-size: min(100%, 55vh);
-    width: var(--board-size) !important;
-    height: var(--board-size) !important;
-    min-height: var(--board-size) !important;
-    max-height: var(--board-size) !important;
-    flex-shrink: 0 !important; 
-    margin: 15px auto;
+    width: min(100%, 65vh); /* Prevents overflow on tall screens */
+    aspect-ratio: 1 / 1; 
+    margin: 10px auto;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -173,17 +166,18 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 }
 
 .chessboard {
-    display: grid;
-    /* STRICT 12.5% COLUMNS & ROWS: Fixes the jittering cells completely */
-    grid-template-columns: repeat(8, 12.5%);
-    grid-template-rows: repeat(8, 12.5%);
     width: 100%;
     height: 100%;
-    max-width: 100%;
-    max-height: 100%;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
     border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.chessboard.flipped-board {
+    transform: rotate(180deg);
 }
 
 .square {
@@ -200,20 +194,22 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 
 /* 
    Last Move Blue Pulse
-   Smoothly animates between the square's base color and the blue tint 
+   Smoothly animates exactly from original color to blue 
 */
-.square.last-move::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    animation: pulse-blue 1.2s infinite alternate;
-    pointer-events: none;
-    z-index: 1;
+.square.light.last-move {
+    animation: pulse-light-blue 1.5s infinite alternate;
+}
+.square.dark.last-move {
+    animation: pulse-dark-blue 1.5s infinite alternate;
 }
 
-@keyframes pulse-blue {
-    from { background-color: transparent; }
-    to { background-color: rgba(50, 150, 255, 0.6); }
+@keyframes pulse-light-blue {
+    from { background-color: var(--board-light); }
+    to { background-color: #8ab6ff; }
+}
+@keyframes pulse-dark-blue {
+    from { background-color: var(--board-dark); }
+    to { background-color: #316fa8; }
 }
 
 .square.checking-piece {
@@ -226,19 +222,27 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     to { box-shadow: inset 0 0 25px rgba(255, 0, 0, 1) !important; }
 }
 
-/* Bulletproof Piece Centering */
+/* 
+  Bulletproof Piece Overlay
+  CSS classes handle rotation safely, preventing cells from expanding. 
+*/
 .piece {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0; left: 0; width: 100%; height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: clamp(24px, min(10vw, 6vh), 48px);
+    font-size: clamp(20px, 8vmin, 50px);
     line-height: 1;
     z-index: 2;
     pointer-events: none;
     filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
 }
+
+.piece.flipped {
+    transform: rotate(180deg);
+}
+
 .piece.w { color: #ffffff; }
 .piece.b { color: #000000; filter: drop-shadow(0 2px 2px rgba(255,255,255,0.3)); }
 

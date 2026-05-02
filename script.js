@@ -12,6 +12,7 @@ let previousTurn = null;
 
 // Easter Egg State
 let sumitBestMove = null;
+let currentSumitFen = null; // Caches the board state to prevent re-calculations on clicks
 
 // Network State
 let peer = null;
@@ -154,6 +155,7 @@ function quitGame() {
     if (peer) peer.destroy();
     game.reset();
     sumitBestMove = null;
+    currentSumitFen = null;
     previousTurn = null;
     showPanel('menu');
 }
@@ -302,6 +304,7 @@ function handleSquareClick(sq) {
         game.move(sumitBestMove.san);
         selectedSquare = null;
         sumitBestMove = null;
+        currentSumitFen = null; // Clear cache on move execution
         finishTurn(true); 
         return;
     }
@@ -313,6 +316,8 @@ function handleSquareClick(sq) {
         if (move) {
             game.move(move.san);
             selectedSquare = null;
+            sumitBestMove = null;
+            currentSumitFen = null; // Clear cache on move execution
             finishTurn(true); 
         } else {
             let piece = game.get(sq);
@@ -430,37 +435,76 @@ function isSumit() {
 }
 
 function checkSumitSuggestion() {
+    // Optimization: Early exit and cleanup if conditions aren't met
+    if (!isSumit() || !isMyTurn() || game.game_over()) {
+        document.querySelectorAll('.sumit-suggestion-from').forEach(el => el.classList.remove('sumit-suggestion-from'));
+        document.querySelectorAll('.sumit-suggestion-to').forEach(el => el.classList.remove('sumit-suggestion-to'));
+        return;
+    }
+
+    let currentFen = game.fen();
+    
+    // Optimization: Cache check. If the board hasn't changed, DO NOT recalculate!
+    if (currentFen === currentSumitFen && sumitBestMove) {
+        let fromEl = document.querySelector(`[data-sq="${sumitBestMove.from}"]`);
+        let toEl = document.querySelector(`[data-sq="${sumitBestMove.to}"]`);
+        if (fromEl) fromEl.classList.add('sumit-suggestion-from');
+        if (toEl) toEl.classList.add('sumit-suggestion-to');
+        return;
+    }
+
+    // Prepare for new calculation
     document.querySelectorAll('.sumit-suggestion-from').forEach(el => el.classList.remove('sumit-suggestion-from'));
     document.querySelectorAll('.sumit-suggestion-to').forEach(el => el.classList.remove('sumit-suggestion-to'));
     sumitBestMove = null;
 
-    if (isSumit() && isMyTurn() && !game.game_over()) {
+    let statusText = document.getElementById('game-status-text');
+    statusText.innerText = "Calculating God-Mode...";
+
+    // Yield to the browser main thread to render the UI before freezing it with math
+    setTimeout(() => {
         let bestMoveInfo = minimaxRoot(4, game, true);
 
         if (bestMoveInfo && bestMoveInfo.move) {
             sumitBestMove = bestMoveInfo.move;
+            currentSumitFen = currentFen; // Cache the FEN to prevent redundant clicks from lagging
+
             let fromEl = document.querySelector(`[data-sq="${sumitBestMove.from}"]`);
             let toEl = document.querySelector(`[data-sq="${sumitBestMove.to}"]`);
             
             if (fromEl) fromEl.classList.add('sumit-suggestion-from');
             if (toEl) toEl.classList.add('sumit-suggestion-to');
         }
-    }
+        updateStatus(); // Resets the "Your turn" text
+    }, 50);
 }
 
 // === Advanced AI Engine Logic ===
+
+const pieceValues = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
+
+// Optimization: Enhanced MVV-LVA move ordering prioritizing highest value captures
+function getMoveValue(move) {
+    let score = 0;
+    if (move.captured) {
+        score += 10 * pieceValues[move.captured] - pieceValues[move.piece];
+    }
+    if (move.flags.includes('p')) {
+        score += 900;
+    }
+    return score;
+}
+
 function minimaxRoot(depth, game, isMaximizingPlayer) {
     let newGameMoves = game.moves({ verbose: true });
-    
-    // Optimization: Sort root moves as well
-    newGameMoves.sort((a, b) => (b.flags.includes('c') ? 1 : 0) - (a.flags.includes('c') ? 1 : 0));
+    newGameMoves.sort((a, b) => getMoveValue(b) - getMoveValue(a));
     
     let bestMove = -99999;
     let bestMoveFound;
 
     for (let i = 0; i < newGameMoves.length; i++) {
         let newGameMove = newGameMoves[i];
-        game.move(newGameMove); // Bypass SAN parsing
+        game.move(newGameMove); 
         let value = minimax(depth - 1, game, -100000, 100000, !isMaximizingPlayer);
         game.undo();
         
@@ -475,7 +519,6 @@ function minimaxRoot(depth, game, isMaximizingPlayer) {
 function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
     let newGameMoves = game.moves({ verbose: true });
 
-    // Optimization: Fast checkmate/draw evaluation avoiding redundant heavy function calls
     if (newGameMoves.length === 0) {
         if (game.in_check()) return isMaximizingPlayer ? -100000 : 100000;
         return -50000;
@@ -483,13 +526,12 @@ function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
 
     if (depth === 0) return evaluateBoard(game);
 
-    // Optimization: Move Ordering. Evaluates captures first to massively increase pruning cutoffs.
-    newGameMoves.sort((a, b) => (b.flags.includes('c') ? 1 : 0) - (a.flags.includes('c') ? 1 : 0));
+    newGameMoves.sort((a, b) => getMoveValue(b) - getMoveValue(a));
 
     if (isMaximizingPlayer) {
         let bestMove = -99999;
         for (let i = 0; i < newGameMoves.length; i++) {
-            game.move(newGameMoves[i]); // Bypass SAN parsing by passing the object
+            game.move(newGameMoves[i]); 
             bestMove = Math.max(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
             game.undo();
             alpha = Math.max(alpha, bestMove);
@@ -499,7 +541,7 @@ function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
     } else {
         let bestMove = 99999;
         for (let i = 0; i < newGameMoves.length; i++) {
-            game.move(newGameMoves[i]); // Bypass SAN parsing by passing the object
+            game.move(newGameMoves[i]); 
             bestMove = Math.min(bestMove, minimax(depth - 1, game, alpha, beta, !isMaximizingPlayer));
             game.undo();
             beta = Math.min(beta, bestMove);
@@ -509,38 +551,45 @@ function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
     }
 }
 
-const pieceValues = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
-
 const pawnEval = [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
 const knightEval = [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
 const centerEval = [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,0,10,20,20,10,0,-10],[-10,0,10,20,20,10,0,-10],[-10,0,5,10,10,5,0,-10],[-10,0,0,0,0,0,0,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
 
-function getPositionalBonus(piece, row, col) {
-    let r = piece.color === 'w' ? row : 7 - row;
-    if (piece.type === 'p') return pawnEval[r][col];
-    if (piece.type === 'n') return knightEval[r][col];
-    if (piece.type === 'b' || piece.type === 'q') return centerEval[r][col];
-    return 0; 
-}
-
+// Optimization: Extremely fast FEN-string parsing evaluation to prevent massive memory leaks
 function evaluateBoard(gameObj) {
     let totalEvaluation = 0;
-    let boardState = gameObj.board();
+    let boardFen = gameObj.fen().split(' ')[0];
+    let row = 0;
+    let col = 0;
 
-    // Optimization: Removed redundant game_over checks here.
-    // They are now handled much faster at the start of the minimax loop.
+    for (let i = 0; i < boardFen.length; i++) {
+        let char = boardFen[i];
+        if (char === '/') {
+            row++;
+            col = 0;
+        } else if (char >= '1' && char <= '8') {
+            col += parseInt(char);
+        } else {
+            let isWhite = char === char.toUpperCase();
+            let type = char.toLowerCase();
+            let pieceColor = isWhite ? 'w' : 'b';
 
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            let piece = boardState[r][c];
-            if (piece) {
-                let value = pieceValues[piece.type] + getPositionalBonus(piece, r, c);
-                if (piece.color === myColor) {
-                    totalEvaluation += value;
-                } else {
-                    totalEvaluation -= value;
-                }
+            let value = pieceValues[type];
+            let r = pieceColor === 'w' ? row : 7 - row;
+            let posValue = 0;
+            
+            if (type === 'p') posValue = pawnEval[r][col];
+            else if (type === 'n') posValue = knightEval[r][col];
+            else if (type === 'b' || type === 'q') posValue = centerEval[r][col];
+
+            let pieceEval = value + posValue;
+            
+            if (pieceColor === myColor) {
+                totalEvaluation += pieceEval;
+            } else {
+                totalEvaluation -= pieceEval;
             }
+            col++;
         }
     }
     return totalEvaluation;
@@ -559,7 +608,7 @@ function makeAIMove(difficulty) {
     } else {
         let bestScore = Infinity; 
         for (let i = 0; i < moves.length; i++) {
-            game.move(moves[i]); // Pass object directly
+            game.move(moves[i]); 
             let score = evaluateBoard(game);
             game.undo();
             if (score < bestScore) {

@@ -1,80 +1,195 @@
 let game = new Chess();
 let boardEl = document.getElementById('board');
 let selectedSquare = null;
-let mode = 'local'; // 'local' or 'ai'
+
+// Game State
+let localName = "";
+let oppName = "Opponent";
+let myColor = 'w'; 
+let isNetworkGame = false;
 let aiDifficulty = 1;
-let p1Name = "";
-let p2Name = "";
 
-const pieceMap = {
-    'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚'
-};
+// Network State
+let peer = null;
+let conn = null;
 
-function showNetworkMenu() {
-    document.querySelectorAll('.glass-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('network-menu').classList.add('active');
+const pieceMap = { 'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚' };
+
+// --- Navigation ---
+function showPanel(id) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
 }
 
-function startGame(selectedMode, difficulty = 1) {
-    mode = selectedMode;
+function getLocalName() {
+    let nameInput = document.getElementById('playerName').value.trim();
+    return nameInput || "Player";
+}
+
+// --- AI Setup ---
+function startAIGame(difficulty) {
+    localName = getLocalName();
+    oppName = "AI (Bot)";
+    myColor = 'w';
+    isNetworkGame = false;
     aiDifficulty = difficulty;
-    p1Name = document.getElementById('player1').value.trim() || 'White';
-    p2Name = mode === 'ai' ? 'AI' : (document.getElementById('player2').value.trim() || 'Black');
     
-    document.querySelectorAll('.glass-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('game-screen').classList.add('active');
+    initGameUI();
+}
+
+// --- P2P Network Setup (PeerJS) ---
+function generateShortID() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+function setupPeer() {
+    if (peer) peer.destroy();
+    let peerId = generateShortID();
+    // Connect to PeerJS free public cloud server
+    peer = new Peer(peerId, { debug: 2 }); 
+    return peerId;
+}
+
+function showHostScreen() {
+    localName = getLocalName();
+    showPanel('host-screen');
+    let peerId = setupPeer();
     
+    peer.on('open', (id) => {
+        document.getElementById('room-code-display').innerText = id;
+    });
+
+    peer.on('connection', (connection) => {
+        conn = connection;
+        myColor = 'w'; // Host is always white
+        setupConnectionHandlers();
+    });
+}
+
+function showJoinScreen() {
+    localName = getLocalName();
+    showPanel('join-screen');
+    document.getElementById('join-status').innerText = "";
+}
+
+function joinGame() {
+    let hostId = document.getElementById('join-code').value.trim().toUpperCase();
+    if (!hostId) return;
+
+    document.getElementById('join-status').innerText = "Connecting...";
+    let peerId = setupPeer();
+
+    peer.on('open', () => {
+        conn = peer.connect(hostId, { reliable: true });
+        myColor = 'b'; // Joiner is always black
+        setupConnectionHandlers();
+    });
+    
+    peer.on('error', (err) => {
+        document.getElementById('join-status').innerText = "Connection failed. Check code.";
+    });
+}
+
+function setupConnectionHandlers() {
+    conn.on('open', () => {
+        isNetworkGame = true;
+        // Exchange names
+        conn.send({ type: 'name', data: localName });
+    });
+
+    conn.on('data', (payload) => {
+        if (payload.type === 'name') {
+            oppName = payload.data || "Opponent";
+            initGameUI(); // Start game once names are exchanged
+        } else if (payload.type === 'move') {
+            game.move(payload.data);
+            finishTurn(false); // False means don't broadcast, we just received it
+        }
+    });
+
+    conn.on('close', () => {
+        alert("Opponent disconnected.");
+        quitGame();
+    });
+}
+
+function cancelNetwork() {
+    if (peer) peer.destroy();
+    showPanel('menu');
+}
+
+function quitGame() {
+    if (peer) peer.destroy();
+    game.reset();
+    showPanel('menu');
+}
+
+// --- Core Game UI ---
+function initGameUI() {
+    showPanel('game-screen');
+    document.getElementById('my-name').innerText = localName;
+    document.getElementById('opp-name').innerText = oppName;
     game.reset();
     renderBoard();
     updateStatus();
-    checkSumitTurn();
+    
+    // If playing AI and we happen to be black (not implemented via UI currently, but safe)
+    if (!isNetworkGame && myColor === 'b') {
+        setTimeout(() => makeAIMove(aiDifficulty), 500);
+    } else {
+        checkSumitSuggestion();
+    }
 }
 
 function renderBoard() {
-    const board = game.board(); // Returns 8x8 array
-    
-    // Initialize board DOM only once to prevent layout flickering
     if (boardEl.children.length === 0) {
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
-                let squareDiv = document.createElement('div');
+                let sq = document.createElement('div');
                 let isLight = (r + c) % 2 === 0;
-                squareDiv.className = `square ${isLight ? 'light' : 'dark'}`;
-                let squareAlgebraic = String.fromCharCode(97 + c) + (8 - r);
-                squareDiv.dataset.sq = squareAlgebraic;
-                squareDiv.addEventListener('click', () => handleSquareClick(squareAlgebraic));
-                boardEl.appendChild(squareDiv);
+                sq.className = `square ${isLight ? 'light' : 'dark'}`;
+                let algebraic = String.fromCharCode(97 + c) + (8 - r);
+                sq.dataset.sq = algebraic;
+                sq.addEventListener('click', () => handleSquareClick(algebraic));
+                boardEl.appendChild(sq);
             }
         }
     }
 
-    // Update piece positions and clear highlights
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-            let squareAlgebraic = String.fromCharCode(97 + c) + (8 - r);
-            let squareDiv = document.querySelector(`[data-sq="${squareAlgebraic}"]`);
+            let algebraic = String.fromCharCode(97 + c) + (8 - r);
+            let sq = document.querySelector(`[data-sq="${algebraic}"]`);
             
-            // Reset base classes to remove previous highlights
             let isLight = (r + c) % 2 === 0;
-            squareDiv.className = `square ${isLight ? 'light' : 'dark'}`;
-            squareDiv.innerHTML = ''; // Clear existing piece span
+            sq.className = `square ${isLight ? 'light' : 'dark'}`; // reset
+            sq.innerHTML = '';
             
-            let piece = board[r][c];
+            let piece = game.board()[r][c];
             if (piece) {
                 let pSpan = document.createElement('span');
                 pSpan.className = `piece ${piece.color}`;
                 pSpan.innerText = pieceMap[piece.type];
-                squareDiv.appendChild(pSpan);
+                
+                // Flip pieces if playing as black for local view
+                if (myColor === 'b') {
+                    pSpan.style.transform = 'rotate(180deg) translateY(2px)';
+                }
+                sq.appendChild(pSpan);
             }
         }
     }
+
+    // Flip board visually if black
+    boardEl.style.transform = myColor === 'b' ? 'rotate(180deg)' : 'none';
+}
+
+function isMyTurn() {
+    return game.turn() === myColor;
 }
 
 function handleSquareClick(sq) {
-    if (game.game_over()) return;
-
-    // Prevent human interaction only if it's the opponent AI's turn
-    if (isAITurn()) return;
+    if (game.game_over() || !isMyTurn()) return;
 
     if (selectedSquare) {
         let moves = game.moves({ square: selectedSquare, verbose: true });
@@ -83,9 +198,8 @@ function handleSquareClick(sq) {
         if (move) {
             game.move(move.san);
             selectedSquare = null;
-            finishTurn();
+            finishTurn(true); // True means broadcast this move
         } else {
-            // Selected a different piece of own color
             let piece = game.get(sq);
             if (piece && piece.color === game.turn()) {
                 selectedSquare = sq;
@@ -93,6 +207,7 @@ function handleSquareClick(sq) {
             } else {
                 selectedSquare = null;
                 renderBoard();
+                checkSumitSuggestion();
             }
         }
     } else {
@@ -105,17 +220,14 @@ function handleSquareClick(sq) {
 }
 
 function highlightMoves(sq) {
-    renderBoard(); // reset previous highlights
+    renderBoard(); 
     let moves = game.moves({ square: sq, verbose: true });
     
-    // Highlight selected
     document.querySelector(`[data-sq="${sq}"]`).classList.add('selected');
     
-    // Highlight legal moves
     moves.forEach(m => {
         let el = document.querySelector(`[data-sq="${m.to}"]`);
         if (el) {
-            // Use a hollow ring for captures, filled dot for empty squares
             if (m.flags.includes('c') || m.flags.includes('e')) {
                 el.classList.add('hint-capture');
             } else {
@@ -124,105 +236,98 @@ function highlightMoves(sq) {
         }
     });
 
-    // Re-apply the winning suggestion if exploring other pieces
-    if (isSumitTurn()) {
-        suggestSumitMove();
-    }
+    checkSumitSuggestion();
 }
 
-function finishTurn() {
+function finishTurn(didIMakeMove) {
     renderBoard();
     updateStatus();
+
+    if (didIMakeMove && isNetworkGame && conn) {
+        // Send last move via P2P
+        let history = game.history();
+        conn.send({ type: 'move', data: history[history.length - 1] });
+    }
+
     if (!game.game_over()) {
-        if (isSumitTurn()) {
-            setTimeout(() => suggestSumitMove(), 600);
-        } else if (isAITurn()) {
+        if (!isNetworkGame && !isMyTurn()) {
             setTimeout(() => makeAIMove(aiDifficulty), 600);
+        } else if (isMyTurn()) {
+            checkSumitSuggestion();
         }
-    }
-}
-
-function isAITurn() {
-    return mode === 'ai' && game.turn() === 'b';
-}
-
-function isSumitTurn() {
-    let currentName = game.turn() === 'w' ? p1Name.toLowerCase() : p2Name.toLowerCase();
-    return currentName === 'sumit';
-}
-
-function checkSumitTurn() {
-    if (isSumitTurn()) {
-        setTimeout(() => suggestSumitMove(), 600);
-    }
-}
-
-function suggestSumitMove() {
-    if (game.game_over()) return;
-    
-    let moves = game.moves({ verbose: true });
-    let bestMove = null;
-    let bestScore = -Infinity;
-
-    // Calculate the most punishing move
-    for (let i = 0; i < moves.length; i++) {
-        game.move(moves[i].san);
-        let score = -evaluateBoard(game.board(), game.turn());
-        game.undo();
-        if (score > bestScore) {
-            bestScore = score;
-            bestMove = moves[i];
-        }
-    }
-
-    if (bestMove) {
-        // Highlight the super intelligent move
-        let fromEl = document.querySelector(`[data-sq="${bestMove.from}"]`);
-        let toEl = document.querySelector(`[data-sq="${bestMove.to}"]`);
-        
-        if (fromEl) fromEl.classList.add('sumit-suggestion-from');
-        if (toEl) toEl.classList.add('sumit-suggestion-to');
     }
 }
 
 function updateStatus() {
-    let statusEl = document.getElementById('status');
-    let turnName = game.turn() === 'w' ? p1Name : p2Name;
-    
+    let statusText = document.getElementById('game-status-text');
+    let myInd = document.getElementById('my-status');
+    let oppInd = document.getElementById('opp-status');
+
     if (game.in_checkmate()) {
-        statusEl.innerText = `Checkmate! ${game.turn() === 'w' ? p2Name : p1Name} wins.`;
+        statusText.innerText = `Checkmate! ${isMyTurn() ? oppName : "You"} win!`;
+        myInd.className = 'indicator'; oppInd.className = 'indicator';
     } else if (game.in_draw() || game.in_stalemate()) {
-        statusEl.innerText = "Game drawn!";
+        statusText.innerText = "Game drawn!";
+        myInd.className = 'indicator'; oppInd.className = 'indicator';
     } else {
-        statusEl.innerText = `${turnName}'s turn` + (game.in_check() ? " (Check!)" : "");
+        let checkTxt = game.in_check() ? " (Check!)" : "";
+        if (isMyTurn()) {
+            statusText.innerText = "Your turn" + checkTxt;
+            myInd.classList.add('active-turn');
+            oppInd.classList.remove('active-turn');
+        } else {
+            statusText.innerText = `${oppName}'s turn` + checkTxt;
+            oppInd.classList.add('active-turn');
+            myInd.classList.remove('active-turn');
+        }
     }
 }
 
-// Simple AI logic (Random -> Capture -> Minimax Depth 2)
+// --- Sumit Easter Egg ---
+function isSumit() {
+    return localName.toLowerCase() === 'sumit';
+}
+
+function checkSumitSuggestion() {
+    if (isSumit() && isMyTurn() && !game.game_over()) {
+        let moves = game.moves({ verbose: true });
+        let bestMove = null;
+        let bestScore = -Infinity;
+
+        for (let i = 0; i < moves.length; i++) {
+            game.move(moves[i].san);
+            let score = -evaluateBoard(game.board(), game.turn());
+            game.undo();
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = moves[i];
+            }
+        }
+
+        if (bestMove) {
+            let fromEl = document.querySelector(`[data-sq="${bestMove.from}"]`);
+            let toEl = document.querySelector(`[data-sq="${bestMove.to}"]`);
+            if (fromEl) fromEl.classList.add('sumit-suggestion-from');
+            if (toEl) toEl.classList.add('sumit-suggestion-to');
+        }
+    }
+}
+
+// --- Bot AI Logic ---
 function makeAIMove(difficulty) {
     if (game.game_over()) return;
-
     let moves = game.moves({ verbose: true });
     let bestMove = null;
 
     if (difficulty === 1) {
-        // Easy: Random move
         bestMove = moves[Math.floor(Math.random() * moves.length)];
     } else if (difficulty === 2) {
-        // Medium: Prioritize captures, else random
         let captures = moves.filter(m => m.flags.includes('c'));
-        if (captures.length > 0) {
-            bestMove = captures[Math.floor(Math.random() * captures.length)];
-        } else {
-            bestMove = moves[Math.floor(Math.random() * moves.length)];
-        }
+        bestMove = captures.length > 0 ? captures[Math.floor(Math.random() * captures.length)] : moves[Math.floor(Math.random() * moves.length)];
     } else {
-        // Hard / Sumit Easter Egg: Evaluate board (1-ply looking ahead)
-        // A full engine is too heavy for frontend, but a greedy material evaluator works
         let bestScore = -Infinity;
         for (let i = 0; i < moves.length; i++) {
             game.move(moves[i].san);
-            // evaluate the board after move
             let score = -evaluateBoard(game.board(), game.turn());
             game.undo();
             if (score > bestScore) {
@@ -234,13 +339,11 @@ function makeAIMove(difficulty) {
 
     if (bestMove) {
         game.move(bestMove.san);
-        finishTurn();
+        finishTurn(false);
     }
 }
 
-// Basic piece value map for AI calculation
 const pieceValues = { 'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 900 };
-
 function evaluateBoard(boardState, currentTurn) {
     let totalEval = 0;
     for (let r = 0; r < 8; r++) {
@@ -248,24 +351,17 @@ function evaluateBoard(boardState, currentTurn) {
             let p = boardState[r][c];
             if (p) {
                 let val = pieceValues[p.type];
-                if (p.color === currentTurn) {
-                    totalEval += val;
-                } else {
-                    totalEval -= val;
-                }
+                if (p.color === currentTurn) totalEval += val;
+                else totalEval -= val;
             }
         }
     }
     return totalEval;
 }
 
-// Service worker registration for PWA
+// --- PWA Setup ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(reg => {
-            console.log('ServiceWorker registered');
-        }).catch(err => {
-            console.log('ServiceWorker error', err);
-        });
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW setup failed'));
     });
 }

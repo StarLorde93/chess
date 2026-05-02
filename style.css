@@ -180,14 +180,22 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .square.dark { background-color: var(--board-dark); }
 .square.selected { background-color: var(--highlight) !important; }
 
-/* Valid Move Hints */
+/* Valid Move Hints - Perfectly Centered via Inset binding */
 .square.hint::after {
-    content: ''; position: absolute; width: 25%; height: 25%;
-    background: rgba(0, 0, 0, 0.15); border-radius: 50%; pointer-events: none;
+    content: ''; 
+    position: absolute; 
+    top: 37.5%; bottom: 37.5%; left: 37.5%; right: 37.5%;
+    background: rgba(0, 0, 0, 0.15); 
+    border-radius: 50%; 
+    pointer-events: none;
 }
 .square.hint-capture::after {
-    content: ''; position: absolute; width: 85%; height: 85%;
-    border: 5px solid rgba(0, 0, 0, 0.15); border-radius: 50%; pointer-events: none;
+    content: ''; 
+    position: absolute; 
+    top: 7.5%; bottom: 7.5%; left: 7.5%; right: 7.5%;
+    border: 5px solid rgba(0, 0, 0, 0.15); 
+    border-radius: 50%; 
+    pointer-events: none;
 }
 
 /* Unicode Pieces */
@@ -201,19 +209,16 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
 .piece.w { color: #ffffff; }
 .piece.b { color: #000000; filter: drop-shadow(0 2px 2px rgba(255,255,255,0.3)); }
 
-/* Sumit Easter Egg CSS */
+/* Sumit Easter Egg CSS - Perfectly Centered via Inset binding */
 .sumit-suggestion-from {
     box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.8) !important;
     animation: pulse-gold 1.5s infinite alternate;
 }
+
 .sumit-suggestion-to::after {
     content: ''; 
     position: absolute; 
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 80%; 
-    height: 80%;
+    top: 10%; bottom: 10%; left: 10%; right: 10%;
     border: 5px solid rgba(255, 215, 0, 1); 
     border-radius: 50%;
     pointer-events: none; 
@@ -225,13 +230,14 @@ button.secondary { background: transparent; border: 1px solid rgba(255, 255, 255
     from { box-shadow: inset 0 0 10px rgba(255, 215, 0, 0.4) !important; }
     to { box-shadow: inset 0 0 30px rgba(255, 215, 0, 1) !important; }
 }
+
 @keyframes pulse-ring {
     from { 
-        transform: translate(-50%, -50%) scale(0.9); 
+        transform: scale(0.9); 
         opacity: 0.5; 
     }
     to { 
-        transform: translate(-50%, -50%) scale(1.05); 
+        transform: scale(1.05); 
         opacity: 1; 
     }
 }

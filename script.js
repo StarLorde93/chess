@@ -8,6 +8,7 @@ let oppName = "Opponent";
 let myColor = 'w'; 
 let isNetworkGame = false;
 let aiDifficulty = 1;
+let previousTurn = null;
 
 // Easter Egg State
 let sumitBestMove = null;
@@ -36,7 +37,7 @@ function startAIGame(difficulty) {
     myColor = 'w';
     isNetworkGame = false;
     aiDifficulty = difficulty;
-    
+    previousTurn = null;
     initGameUI();
 }
 
@@ -95,6 +96,7 @@ function joinGame() {
 function setupConnectionHandlers() {
     conn.on('open', () => {
         isNetworkGame = true;
+        previousTurn = null;
         conn.send({ type: 'name', data: localName });
     });
 
@@ -108,9 +110,17 @@ function setupConnectionHandlers() {
         }
     });
 
+    // Handle Opponent Quitting Mid-Game
     conn.on('close', () => {
-        alert("Opponent disconnected.");
-        quitGame();
+        if (game.game_over()) return; // Don't trigger if game was already over naturally
+        let statusText = document.getElementById('game-status-text');
+        statusText.innerText = `You Won! ${oppName} Fled.`;
+        statusText.classList.add('check-text'); // Make it red & pop
+        
+        // Show success message briefly, then boot them to main menu
+        setTimeout(() => {
+            quitGame();
+        }, 3500);
     });
 }
 
@@ -122,7 +132,73 @@ function cancelNetwork() {
 function quitGame() {
     if (peer) peer.destroy();
     game.reset();
+    sumitBestMove = null;
+    previousTurn = null;
     showPanel('menu');
+}
+
+// --- Ray-Casting Attacker Detection (For the Red Pulse) ---
+function getCheckingSquares() {
+    if (!game.in_check()) return [];
+    
+    let kingSq = null;
+    let oppColor = game.turn() === 'w' ? 'b' : 'w';
+
+    // 1. Find the King currently under check
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            let sq = String.fromCharCode(97 + c) + (8 - r);
+            let p = game.get(sq);
+            if (p && p.type === 'k' && p.color === game.turn()) kingSq = sq;
+        }
+    }
+    if (!kingSq) return [];
+
+    let attackers = [];
+    const board = game.board();
+    let tr = 8 - parseInt(kingSq[1]);
+    let tc = kingSq.charCodeAt(0) - 97;
+
+    // 2. Check Knights
+    const knightMoves = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+    knightMoves.forEach(m => {
+        let r = tr + m[0], c = tc + m[1];
+        if (r >= 0 && r < 8 && c >= 0 && c < 8) {
+            let p = board[r][c];
+            if (p && p.color === oppColor && p.type === 'n') attackers.push(String.fromCharCode(97 + c) + (8 - r));
+        }
+    });
+
+    // 3. Check Pawns
+    let pawnDir = oppColor === 'w' ? 1 : -1;
+    let pr = tr + pawnDir;
+    [tc - 1, tc + 1].forEach(pc => {
+        if (pr >= 0 && pr < 8 && pc >= 0 && pc < 8) {
+            let p = board[pr][pc];
+            if (p && p.color === oppColor && p.type === 'p') attackers.push(String.fromCharCode(97 + pc) + (8 - pr));
+        }
+    });
+
+    // 4. Raycast for Sliding Pieces (Rooks, Bishops, Queens)
+    const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    dirs.forEach(d => {
+        for (let step = 1; step < 8; step++) {
+            let r = tr + d[0] * step, c = tc + d[1] * step;
+            if (r < 0 || r >= 8 || c < 0 || c >= 8) break;
+            let p = board[r][c];
+            if (p) {
+                if (p.color === oppColor) {
+                    let isDiag = d[0] !== 0 && d[1] !== 0;
+                    let isStraight = d[0] === 0 || d[1] === 0;
+                    if (p.type === 'q' || (p.type === 'b' && isDiag) || (p.type === 'r' && isStraight)) {
+                        attackers.push(String.fromCharCode(97 + c) + (8 - r));
+                    }
+                }
+                break; // Stop looking further on this vector
+            }
+        }
+    });
+    return attackers;
 }
 
 // --- Core Game UI ---
@@ -142,6 +218,11 @@ function initGameUI() {
 }
 
 function renderBoard() {
+    // Easily extract the absolute last move from game history
+    let history = game.history({ verbose: true });
+    let lastMove = history.length > 0 ? history[history.length - 1] : null;
+    let checkingSquares = getCheckingSquares();
+
     if (boardEl.children.length === 0) {
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
@@ -165,6 +246,16 @@ function renderBoard() {
             sq.className = `square ${isLight ? 'light' : 'dark'}`; 
             sq.innerHTML = '';
             
+            // Add Blue Highlight for Last Move tracking
+            if (lastMove && (algebraic === lastMove.from || algebraic === lastMove.to)) {
+                sq.classList.add('last-move');
+            }
+
+            // Add Red Pulse to pieces checking the king
+            if (checkingSquares.includes(algebraic)) {
+                sq.classList.add('checking-piece');
+            }
+
             let piece = game.board()[r][c];
             if (piece) {
                 let pSpan = document.createElement('span');
@@ -172,7 +263,7 @@ function renderBoard() {
                 pSpan.innerText = pieceMap[piece.type];
                 
                 if (myColor === 'b') {
-                    pSpan.style.transform = 'rotate(180deg) translateY(2px)';
+                    pSpan.style.transform = 'rotate(180deg)';
                 }
                 sq.appendChild(pSpan);
             }
@@ -189,7 +280,6 @@ function isMyTurn() {
 function handleSquareClick(sq) {
     if (game.game_over() || !isMyTurn()) return;
 
-    // Auto-play the Sumit God-Mode move if you click either the glowing piece or target
     if (sumitBestMove && (sq === sumitBestMove.from || sq === sumitBestMove.to)) {
         game.move(sumitBestMove.san);
         selectedSquare = null;
@@ -264,6 +354,13 @@ function finishTurn(didIMakeMove) {
     }
 }
 
+function showTurnToast() {
+    let toast = document.getElementById('turn-toast');
+    toast.classList.remove('show');
+    void toast.offsetWidth; // Trigger reflow to restart animation
+    toast.classList.add('show');
+}
+
 function updateStatus() {
     let statusText = document.getElementById('game-status-text');
     let myInd = document.getElementById('my-status');
@@ -271,22 +368,33 @@ function updateStatus() {
 
     if (game.in_checkmate()) {
         statusText.innerText = `Checkmate! ${isMyTurn() ? oppName : "You"} win!`;
+        statusText.classList.add('check-text');
         myInd.className = 'indicator'; oppInd.className = 'indicator';
     } else if (game.in_draw() || game.in_stalemate()) {
         statusText.innerText = "Game drawn!";
+        statusText.classList.remove('check-text');
         myInd.className = 'indicator'; oppInd.className = 'indicator';
     } else {
-        let checkTxt = game.in_check() ? " (Check!)" : "";
+        let isCheck = game.in_check();
+        let checkTxt = isCheck ? " (Check!)" : "";
+        
+        if (isCheck) statusText.classList.add('check-text');
+        else statusText.classList.remove('check-text');
+
         if (isMyTurn()) {
             statusText.innerText = "Your turn" + checkTxt;
             myInd.classList.add('active-turn');
             oppInd.classList.remove('active-turn');
+            
+            // Pop the toaster when turn shifts to the local player
+            if (previousTurn !== myColor) showTurnToast();
         } else {
             statusText.innerText = `${oppName}'s turn` + checkTxt;
             oppInd.classList.add('active-turn');
             myInd.classList.remove('active-turn');
         }
     }
+    previousTurn = game.turn();
 }
 
 // --- Sumit Easter Egg (Minimax God-Mode) ---
@@ -295,14 +403,13 @@ function isSumit() {
 }
 
 function checkSumitSuggestion() {
-    // Clear out old suggestions
     document.querySelectorAll('.sumit-suggestion-from').forEach(el => el.classList.remove('sumit-suggestion-from'));
     document.querySelectorAll('.sumit-suggestion-to').forEach(el => el.classList.remove('sumit-suggestion-to'));
     sumitBestMove = null;
 
     if (isSumit() && isMyTurn() && !game.game_over()) {
-        // Deep Minimax search (Depth 3) to trap king and preserve pieces
-        let bestMoveInfo = minimaxRoot(3, game, true);
+        // Deep Minimax search. Depth set to 4 half-moves. 
+        let bestMoveInfo = minimaxRoot(4, game, true);
 
         if (bestMoveInfo && bestMoveInfo.move) {
             sumitBestMove = bestMoveInfo.move;
@@ -316,7 +423,6 @@ function checkSumitSuggestion() {
 }
 
 // --- Advanced AI Engine Logic ---
-
 function minimaxRoot(depth, game, isMaximizingPlayer) {
     let newGameMoves = game.moves({ verbose: true });
     let bestMove = -99999;
@@ -325,7 +431,6 @@ function minimaxRoot(depth, game, isMaximizingPlayer) {
     for (let i = 0; i < newGameMoves.length; i++) {
         let newGameMove = newGameMoves[i];
         game.move(newGameMove.san);
-        
         let value = minimax(depth - 1, game, -100000, 100000, !isMaximizingPlayer);
         game.undo();
         
@@ -338,10 +443,7 @@ function minimaxRoot(depth, game, isMaximizingPlayer) {
 }
 
 function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
-    if (depth === 0 || game.game_over()) {
-        return evaluateBoard(game);
-    }
-
+    if (depth === 0 || game.game_over()) return evaluateBoard(game);
     let newGameMoves = game.moves({ verbose: true });
 
     if (isMaximizingPlayer) {
@@ -367,39 +469,11 @@ function minimax(depth, game, alpha, beta, isMaximizingPlayer) {
     }
 }
 
-// Values and Position bonuses for smart logic
 const pieceValues = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
-const pawnEval = [
-    [0,  0,  0,  0,  0,  0,  0,  0],
-    [50, 50, 50, 50, 50, 50, 50, 50],
-    [10, 10, 20, 30, 30, 20, 10, 10],
-    [5,  5, 10, 25, 25, 10,  5,  5],
-    [0,  0,  0, 20, 20,  0,  0,  0],
-    [5, -5,-10,  0,  0,-10, -5,  5],
-    [5, 10, 10,-20,-20, 10, 10,  5],
-    [0,  0,  0,  0,  0,  0,  0,  0]
-];
-const knightEval = [
-    [-50,-40,-30,-30,-30,-30,-40,-50],
-    [-40,-20,  0,  0,  0,  0,-20,-40],
-    [-30,  0, 10, 15, 15, 10,  0,-30],
-    [-30,  5, 15, 20, 20, 15,  5,-30],
-    [-30,  0, 15, 20, 20, 15,  0,-30],
-    [-30,  5, 10, 15, 15, 10,  5,-30],
-    [-40,-20,  0,  5,  5,  0,-20,-40],
-    [-50,-40,-30,-30,-30,-30,-40,-50]
-];
-const centerEval = [
-    [-20,-10,-10,-10,-10,-10,-10,-20],
-    [-10,  0,  0,  0,  0,  0,  0,-10],
-    [-10,  0,  5, 10, 10,  5,  0,-10],
-    [-10,  0, 10, 20, 20, 10,  0,-10],
-    [-10,  0, 10, 20, 20, 10,  0,-10],
-    [-10,  0,  5, 10, 10,  5,  0,-10],
-    [-10,  0,  0,  0,  0,  0,  0,-10],
-    [-20,-10,-10,-10,-10,-10,-10,-20]
-];
+const pawnEval = [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
+const knightEval = [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
+const centerEval = [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,0,10,20,20,10,0,-10],[-10,0,10,20,20,10,0,-10],[-10,0,5,10,10,5,0,-10],[-10,0,0,0,0,0,0,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
 
 function getPositionalBonus(piece, row, col) {
     let r = piece.color === 'w' ? row : 7 - row;
@@ -413,13 +487,11 @@ function evaluateBoard(gameObj) {
     let totalEvaluation = 0;
     let boardState = gameObj.board();
 
-    // Checkmates and Draws processing
     if (gameObj.in_checkmate()) {
-        // If the side ABOUT to move is in checkmate, the side that just moved wins
         return gameObj.turn() === myColor ? -100000 : 100000;
     }
     if (gameObj.in_draw() || gameObj.in_stalemate() || gameObj.in_threefold_repetition()) {
-        return -50000; // Hard penalty to avoid useless draws for Sumit
+        return -50000; 
     }
 
     for (let r = 0; r < 8; r++) {
@@ -427,7 +499,6 @@ function evaluateBoard(gameObj) {
             let piece = boardState[r][c];
             if (piece) {
                 let value = pieceValues[piece.type] + getPositionalBonus(piece, r, c);
-                // Positive score favors 'myColor' (Sumit)
                 if (piece.color === myColor) {
                     totalEvaluation += value;
                 } else {
@@ -439,7 +510,6 @@ function evaluateBoard(gameObj) {
     return totalEvaluation;
 }
 
-// Regular opponent Bot logic (updated to use new evaluateBoard)
 function makeAIMove(difficulty) {
     if (game.game_over()) return;
     let moves = game.moves({ verbose: true });
@@ -451,7 +521,7 @@ function makeAIMove(difficulty) {
         let captures = moves.filter(m => m.flags.includes('c'));
         bestMove = captures.length > 0 ? captures[Math.floor(Math.random() * captures.length)] : moves[Math.floor(Math.random() * moves.length)];
     } else {
-        let bestScore = Infinity; // Bot wants to MINIMIZE the local player's score
+        let bestScore = Infinity; 
         for (let i = 0; i < moves.length; i++) {
             game.move(moves[i].san);
             let score = evaluateBoard(game);
